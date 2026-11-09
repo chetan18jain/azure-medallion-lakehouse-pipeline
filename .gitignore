@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+.venv/
+data/bronze/
+data/silver/
+data/gold/
+spark-warehouse/
+metastore_db/
+derby.log

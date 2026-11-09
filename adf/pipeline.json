@@ -1,0 +1,50 @@
+{
+  "name": "pl_medallion_lakehouse_daily",
+  "properties": {
+    "description": "Daily Bronze -> Silver -> Gold medallion load. Parameters point at ADLS Gen2 containers in production; locally the same jobs run over folders.",
+    "parameters": {
+      "rawFolder": { "type": "string", "defaultValue": "data/raw" },
+      "bronzeFolder": { "type": "string", "defaultValue": "data/bronze" },
+      "silverFolder": { "type": "string", "defaultValue": "data/silver" },
+      "goldFolder": { "type": "string", "defaultValue": "data/gold" }
+    },
+    "activities": [
+      {
+        "name": "BronzeIngest",
+        "type": "DatabricksSparkPython",
+        "dependsOn": [],
+        "typeProperties": {
+          "pythonFile": "src/bronze_ingest.py",
+          "parameters": ["--raw", "@pipeline().parameters.rawFolder", "--bronze", "@pipeline().parameters.bronzeFolder"]
+        }
+      },
+      {
+        "name": "SilverTransform",
+        "type": "DatabricksSparkPython",
+        "dependsOn": [{ "activity": "BronzeIngest", "dependencyConditions": ["Succeeded"] }],
+        "typeProperties": {
+          "pythonFile": "src/silver_transform.py",
+          "parameters": ["--bronze", "@pipeline().parameters.bronzeFolder", "--silver", "@pipeline().parameters.silverFolder"]
+        }
+      },
+      {
+        "name": "GoldAggregate",
+        "type": "DatabricksSparkPython",
+        "dependsOn": [{ "activity": "SilverTransform", "dependencyConditions": ["Succeeded"] }],
+        "typeProperties": {
+          "pythonFile": "src/gold_aggregate.py",
+          "parameters": ["--silver", "@pipeline().parameters.silverFolder", "--gold", "@pipeline().parameters.goldFolder"]
+        }
+      },
+      {
+        "name": "DeltaMaintenance",
+        "type": "DatabricksSparkPython",
+        "dependsOn": [{ "activity": "GoldAggregate", "dependencyConditions": ["Succeeded"] }],
+        "typeProperties": {
+          "pythonFile": "src/maintenance.py",
+          "parameters": ["--gold", "@pipeline().parameters.goldFolder"]
+        }
+      }
+    ]
+  }
+}
