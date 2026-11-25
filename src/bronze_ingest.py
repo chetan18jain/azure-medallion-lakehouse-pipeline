@@ -4,6 +4,7 @@ Bronze keeps source fidelity: no business rules, just typed storage,
 an ingestion timestamp and partitioning by event_date for orders.
 """
 import argparse
+from delta.tables import DeltaTable
 from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
 
@@ -24,7 +25,13 @@ def ingest_csv(spark, source_path: str, target_path: str,
     if partition_col:
         writer = writer.partitionBy(partition_col)
     writer.save(target_path)
-    print(f"Bronze wrote {df.count()} rows -> {target_path}")
+    # Row count comes from the Delta transaction log, not df.count():
+    # a count() here would re-scan the whole DataFrame after the write,
+    # while history() is a metadata-only read of the just-committed txn.
+    latest = DeltaTable.forPath(spark, target_path).history(1).collect()[0]
+    rows_written = latest["operationMetrics"]["numOutputRows"]
+    print(f"Bronze wrote {rows_written} rows -> {target_path} "
+          f"(version {latest['version']})")
 
 def main():
     parser = argparse.ArgumentParser()
