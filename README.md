@@ -28,7 +28,9 @@ raw CSV extracts                ADLS Gen2 (prod) / local folders (demo)
   trimming, status validation. Quality expectations from
   `src/data_quality.py` (minimum rows, no null keys, no duplicate keys,
   allowed status values) run before anything is written and fail the job
-  on a breach.
+  on a breach. The four checks share one aggregation and one
+  `collect()` (`run_checks`), so the gate scans the orders DataFrame
+  once instead of once per check.
 - **Gold** (`src/gold_aggregate.py`) — reporting-shaped aggregates:
   revenue/orders per day and category, and a per-customer summary.
   Only `COMPLETED` orders count toward revenue.

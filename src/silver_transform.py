@@ -8,8 +8,7 @@ import argparse, sys, os
 from pyspark.sql import functions as F
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from bronze_ingest import get_spark
-from data_quality import (assert_all, check_min_rows, check_no_nulls,
-                          check_no_duplicates, check_values_in)
+from data_quality import assert_all, run_checks
 
 VALID_STATUSES = ["COMPLETED", "CANCELLED", "REFUNDED"]
 
@@ -39,12 +38,14 @@ def main():
     spark = get_spark("silver-transform")
 
     orders = clean_orders(spark, args.bronze)
-    assert_all([
-        check_min_rows(orders, 1),
-        check_no_nulls(orders, ["order_id", "customer_id", "event_date"]),
-        check_no_duplicates(orders, ["order_id"]),
-        check_values_in(orders, "status", VALID_STATUSES),
-    ])
+    # Single-pass gate: all four checks share one aggregation + collect,
+    # instead of one Spark action per check (and one per null column).
+    assert_all(run_checks(orders, {
+        "min_rows": 1,
+        "no_nulls": ["order_id", "customer_id", "event_date"],
+        "no_duplicates": ["order_id"],
+        "values_in": {"status": VALID_STATUSES},
+    }))
     customers = clean_customers(spark, args.bronze)
     products = clean_products(spark, args.bronze)
 
